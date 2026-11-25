@@ -12,6 +12,8 @@
   if (guia) {
     const filas = [...guia.querySelectorAll('.gi')];
     const num = guia.querySelector('.guia__num');
+    const bnum = guia.querySelector('.guia__bnum');
+    const btit = guia.querySelector('.guia__btit');
     const paso = 360 / filas.length;
     let activo = -1;
     let giro = 0;
@@ -22,6 +24,8 @@
       giro += delta;
       guia.style.setProperty('--giro', giro.toFixed(2));
       if (num) num.textContent = String(i + 1).padStart(2, '0');
+      if (bnum) bnum.textContent = String(i + 1).padStart(2, '0');
+      if (btit) btit.textContent = (filas[i].querySelector('.gi__t')?.textContent || '').split(':')[0];
       filas.forEach((f, k) => f.classList.toggle('es-activa', k === i));
     };
     const porDesplazamiento = () => {
@@ -234,7 +238,8 @@
     if (q0 && caja.closest('.p-buscar')) { entrada.value = q0; busca(); }
   });
 
-  // 2) Catálogos (animales, vehículos): filtro por texto, por grupo y por zona/clase sobre fichas ya escritas en el HTML.
+  // 2) Catálogos (animales, vehículos, listas): filtro por texto, grupo y zona sobre fichas ya escritas en el HTML.
+  //    Se enseñan de 24 en 24 para que la página no sea interminable; sin JavaScript se ven todas.
   document.querySelectorAll('[data-cat]').forEach((cat) => {
     const fichas = [...cat.querySelectorAll('.ficha')].map((li) => ({ li, t: quita(li.dataset.t), g: li.dataset.g, s: li.dataset.s }));
     const q = cat.querySelector('[data-q]');
@@ -243,36 +248,48 @@
     const chips = [...cat.querySelectorAll('.chip[data-g]')];
     const n = cat.querySelector('[data-n]');
     const vacio = cat.querySelector('[data-vacio]');
+    const mas = cat.querySelector('[data-mas]');
     const sufijo = n.textContent.replace(/^\d+ /, '');
+    const PASO = 24;
     let grupo = '';
-    const aplica = () => {
+    let limite = PASO;
+    let coinciden = [];
+    const pinta = () => {
+      const visibles = new Set(coinciden.slice(0, limite));
+      for (const f of fichas) f.li.hidden = !visibles.has(f);
+      const quedan = coinciden.length - visibles.size;
+      if (mas) {
+        mas.hidden = quedan <= 0;
+        mas.textContent = `Mostrar ${Math.min(PASO, quedan)} más (quedan ${quedan})`;
+      }
+    };
+    const aplica = (reinicia = true) => {
       const ts = terminos(q.value);
       const z = sel ? sel.value : '';
       if (gsel) grupo = gsel.value;
-      let vis = 0;
-      for (const f of fichas) {
-        const ok = (!grupo || f.g === grupo) && (!z || f.s.split('|').includes(z)) && ts.every((t) => alternativas(t).some((a) => f.t.includes(a)));
-        f.li.hidden = !ok;
-        if (ok) vis++;
-      }
-      n.textContent = vis === fichas.length ? `${vis} ${sufijo}` : `${vis} de ${fichas.length} ${sufijo}`;
-      vacio.hidden = vis > 0;
+      coinciden = fichas.filter((f) => (!grupo || f.g === grupo) && (!z || f.s.split('|').includes(z)) && ts.every((t) => alternativas(t).some((a) => f.t.includes(a))));
+      if (reinicia) limite = PASO;
+      n.textContent = coinciden.length === fichas.length ? `${coinciden.length} ${sufijo}` : `${coinciden.length} de ${fichas.length} ${sufijo}`;
+      vacio.hidden = coinciden.length > 0;
+      pinta();
     };
-    q.addEventListener('input', aplica);
-    if (sel) sel.addEventListener('change', aplica);
-    if (gsel) gsel.addEventListener('change', aplica);
+    q.addEventListener('input', () => aplica());
+    if (sel) sel.addEventListener('change', () => aplica());
+    if (gsel) gsel.addEventListener('change', () => aplica());
     chips.forEach((c) => c.addEventListener('click', () => {
       grupo = c.dataset.g;
       chips.forEach((o) => o.setAttribute('aria-pressed', String(o === c)));
       aplica();
     }));
-    // enlace directo a una ficha (#id): la deja visible aunque haya filtros
+    if (mas) mas.addEventListener('click', () => { limite += PASO; pinta(); });
+    // enlace directo a una ficha (#id): se abre aunque haya filtros o quede más abajo del límite
     const ir = () => {
       const id = decodeURIComponent(location.hash.slice(1));
-      const f = id && fichas.find((x) => x.li.id === id);
-      if (f) { f.li.hidden = false; f.li.scrollIntoView({ block: 'center' }); }
+      const i = id ? coinciden.findIndex((x) => x.li.id === id) : -1;
+      if (i >= 0) { limite = Math.max(limite, i + 1); pinta(); fichas.find((x) => x.li.id === id).li.scrollIntoView({ block: 'center' }); }
     };
     addEventListener('hashchange', ir);
+    aplica();
     ir();
   });
 })();

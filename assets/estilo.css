@@ -877,3 +877,28 @@ main:focus { outline: none; }
 .cat__f > * { min-width: 0; }
 .cat__sel { display: flex; width: 100%; max-width: 22rem; }
 .cat__sel select { flex: 1; width: 100%; }
+
+/* ---------- arreglos gráficos (25/11 tarde) */
+.hdr { background: oklch(0.19 0.032 222 / 0.985); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.ficha__d dd { margin: 0; }
+.ficha__d dt { margin: 0; }
+.cat__mas-w { display: flex; justify-content: center; margin-top: 0.5rem; }
+.cat__mas { cursor: pointer; border: 1.5px solid var(--raya); background: var(--noche-2); color: var(--hueso); min-height: 3rem; }
+.cat__mas[hidden] { display: none; }
+.herrs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+@media (min-width: 62rem) { .herrs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.herr { padding: 0.95rem 1rem; gap: 0.2rem; }
+.herr__t { font-size: 1.3rem; }
+.herr__d { font-size: 0.82rem; }
+.guia__barra { display: none; }
+@media (max-width: 61.99rem) {
+  .guia__dial { display: none; }
+  .guia__barra { position: sticky; top: 0; z-index: 5; display: flex; align-items: baseline; gap: 0.75rem; height: 3.1rem; padding-block: 0.6rem; margin-inline: calc(var(--canal-i) * -1) calc(var(--canal-d) * -1); padding-inline: var(--canal-i) var(--canal-d); background: var(--noche); border-block: 1px solid var(--raya); pointer-events: none; overflow: hidden; white-space: nowrap; }
+  .guia__bnum { font: 800 1.5rem/1 var(--titular); font-stretch: 75%; color: var(--coral); font-variant-numeric: tabular-nums; }
+  .guia__btit { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 700 1rem/1 var(--titular); font-stretch: 85%; }
+  .guia__bn { font-size: var(--t-xs); color: var(--niebla); }
+  html:has(.guia) { scroll-padding-top: 4.5rem; }
+}
+
+.rel { margin-block: 2rem 1rem; display: grid; gap: 0.6rem; }
+.rel .herrs { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); margin-top: 0; }
