@@ -160,3 +160,119 @@
     document.addEventListener('pointerleave', () => punt.classList.remove('es-visible'));
   }
 })();
+
+/* ---------- buscador (25/11): sin servicios externos, todo en el navegador */
+(() => {
+  'use strict';
+  const quita = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const VACIAS = new Set('el la los las lo de del al en y o u a un una unos unas por para con sin que como donde estan esta son es se mi tu su todos todas todo toda hay ver quiero buscar encontrar cuales cual cuantos cuantas'.split(' '));
+  const SIN = { cromo: ['carta', 'coleccion'], cromos: ['cartas', 'coleccion'], carta: ['cromo'], cartas: ['cromos'], bichos: ['animales'], bicho: ['animal'], fauna: ['animales'], coche: ['vehiculo', 'coches'], coches: ['vehiculos'], carro: ['coche'], auto: ['coche'], vehiculos: ['coches'], moto: ['motos'], avion: ['aviones'], barco: ['barcos'], heli: ['helicoptero'], dinero: ['dolares', 'efectivo'], pasta: ['dinero'], logro: ['trofeo'], logros: ['trofeos'], platino: ['trofeo'], flamenco: ['flamencos'], coleccionable: ['coleccionables', 'coleccion'], secreto: ['secretos', 'easter'], secretos: ['easter', 'eggs'], truco: ['trucos', 'codigos'], tanque: ['bunker'], pajaro: ['ave', 'aves'], pajaros: ['aves'], pez: ['peces'], peces: ['pez'], perro: ['perros'], gato: ['gatos'] };
+  const terminos = (q) => quita(q).split(/[^a-z0-9ñ]+/).filter((t) => t && !VACIAS.has(t) && (t.length > 1 || /\d/.test(t)));
+  const alternativas = (t) => [t, ...(SIN[t] || [])];
+
+  // 1) Caja de búsqueda global: capítulos, apartados, artículos, animales y vehículos.
+  document.querySelectorAll('[data-buscar]').forEach((caja) => {
+    const entrada = caja.querySelector('input');
+    const lista = caja.querySelector('[data-resultados]');
+    const estado = caja.querySelector('[data-estado]');
+    const borrar = caja.querySelector('[data-limpiar]');
+    const raiz = caja.dataset.raiz || './';
+    let indice = null;
+    let cargando = null;
+    const cargar = () => cargando || (cargando = fetch(caja.dataset.idx).then((r) => r.json()).then((j) => {
+      indice = j.map((x) => ({ ...x, nt: quita(x.t), nx: quita(x.x + ' ' + x.k) }));
+    }).catch(() => { estado.textContent = 'No se pudo cargar el buscador. Recarga la página.'; }));
+    const puntua = (x, ts) => {
+      let total = 0;
+      for (const t of ts) {
+        let mejor = 0;
+        for (const a of alternativas(t)) {
+          if (x.nt.includes(a)) mejor = Math.max(mejor, x.nt.startsWith(a) || x.nt.includes(' ' + a) ? 12 : 8);
+          else if (x.nx.includes(a)) mejor = Math.max(mejor, 3);
+        }
+        if (!mejor) return 0;
+        total += mejor;
+      }
+      if (/^(Lista|Buscador)/.test(x.k)) total += 2; // las listas completas, por delante en empates
+      return total;
+    };
+    const pinta = (res) => {
+      lista.replaceChildren(...res.map((x) => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = raiz + x.u;
+        const k = document.createElement('span'); k.className = 'busca__k'; k.textContent = x.k;
+        const t = document.createElement('span'); t.className = 'busca__t'; t.textContent = x.t;
+        a.append(k, t);
+        if (x.x) { const d = document.createElement('span'); d.className = 'busca__x'; d.textContent = x.x.length > 150 ? x.x.slice(0, 150).replace(/\s\S*$/, '') + '…' : x.x; a.append(d); }
+        li.append(a);
+        return li;
+      }));
+    };
+    const busca = async () => {
+      const q = entrada.value;
+      borrar.hidden = !q;
+      const ts = terminos(q);
+      if (!ts.length) { lista.replaceChildren(); estado.textContent = q.trim() ? 'Escribe alguna palabra más concreta.' : ''; return; }
+      await cargar();
+      if (!indice || entrada.value !== q) return;
+      let res = indice.map((x) => ({ x, p: puntua(x, ts) })).filter((r) => r.p > 0).sort((a, b) => b.p - a.p).map((r) => r.x);
+      let parcial = false;
+      if (!res.length && ts.length > 1) {
+        // sin coincidencia con todas las palabras: enseña lo que acierta con alguna, mejor que nada
+        res = indice.map((x) => ({ x, p: Math.max(...ts.map((t) => puntua(x, [t]))) })).filter((r) => r.p > 0).sort((a, b) => b.p - a.p).map((r) => r.x);
+        parcial = res.length > 0;
+      }
+      estado.textContent = res.length ? `${res.length > 30 ? 'Más de 30' : res.length} resultado${res.length === 1 ? '' : 's'}${parcial ? ' (coinciden con alguna de tus palabras)' : ''}` : 'Sin resultados. Prueba con otra palabra: «tanque», «cartas», «animales»…';
+      pinta(res.slice(0, 30));
+    };
+    let t0;
+    entrada.addEventListener('input', () => { clearTimeout(t0); t0 = setTimeout(busca, 120); });
+    entrada.addEventListener('focus', cargar, { once: true });
+    borrar.addEventListener('click', () => { entrada.value = ''; busca(); entrada.focus(); });
+    const q0 = new URLSearchParams(location.search).get('q');
+    if (q0 && caja.closest('.p-buscar')) { entrada.value = q0; busca(); }
+  });
+
+  // 2) Catálogos (animales, vehículos): filtro por texto, por grupo y por zona/clase sobre fichas ya escritas en el HTML.
+  document.querySelectorAll('[data-cat]').forEach((cat) => {
+    const fichas = [...cat.querySelectorAll('.ficha')].map((li) => ({ li, t: quita(li.dataset.t), g: li.dataset.g, s: li.dataset.s }));
+    const q = cat.querySelector('[data-q]');
+    const sel = cat.querySelector('select[data-s]');
+    const gsel = cat.querySelector('select[data-gs]');
+    const chips = [...cat.querySelectorAll('.chip[data-g]')];
+    const n = cat.querySelector('[data-n]');
+    const vacio = cat.querySelector('[data-vacio]');
+    const sufijo = n.textContent.replace(/^\d+ /, '');
+    let grupo = '';
+    const aplica = () => {
+      const ts = terminos(q.value);
+      const z = sel ? sel.value : '';
+      if (gsel) grupo = gsel.value;
+      let vis = 0;
+      for (const f of fichas) {
+        const ok = (!grupo || f.g === grupo) && (!z || f.s.split('|').includes(z)) && ts.every((t) => alternativas(t).some((a) => f.t.includes(a)));
+        f.li.hidden = !ok;
+        if (ok) vis++;
+      }
+      n.textContent = vis === fichas.length ? `${vis} ${sufijo}` : `${vis} de ${fichas.length} ${sufijo}`;
+      vacio.hidden = vis > 0;
+    };
+    q.addEventListener('input', aplica);
+    if (sel) sel.addEventListener('change', aplica);
+    if (gsel) gsel.addEventListener('change', aplica);
+    chips.forEach((c) => c.addEventListener('click', () => {
+      grupo = c.dataset.g;
+      chips.forEach((o) => o.setAttribute('aria-pressed', String(o === c)));
+      aplica();
+    }));
+    // enlace directo a una ficha (#id): la deja visible aunque haya filtros
+    const ir = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const f = id && fichas.find((x) => x.li.id === id);
+      if (f) { f.li.hidden = false; f.li.scrollIntoView({ block: 'center' }); }
+    };
+    addEventListener('hashchange', ir);
+    ir();
+  });
+})();
